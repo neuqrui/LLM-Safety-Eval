@@ -1,0 +1,31 @@
+# Python 缓存文件
+__pycache__/
+*.pyc
+*.pyo
+
+# 虚拟环境 (如果你建在了项目目录下)
+venv/
+env/
+miniconda3/
+api_logs/
+allenai/
+.nv/
+.triton/
+.config/
+.local/
+.cache/
+.env
+
+# 项目运行产生的海量日志和结果
+experiment_logs/
+outputs/
+datasets/
+
+.vscode/
+.idea/
+
+.git-credentials/
+.gitconfig/
+
+.git-credentials
+.git-credentials
