@@ -5,11 +5,11 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 export HF_ENDPOINT=https://hf-mirror.com
 export HOME="/data/home/Yichen/CC-GRPO/eval_llm_safety"
 
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=4
 
 
-MODEL_NAME="saver-grpo-14B"
-MODEL_PATH="/data/home/Yichen/CC-GRPO/verl/checkpoints/saver-grpo-14B"
+MODEL_NAME="saver-ppo-15B"
+MODEL_PATH="/data/home/Yichen/CC-GRPO/verl/checkpoints/saver-ppo-15B"
 EVALUATOR_MODEL="/data/home/Yichen/data1/models/meta-llama/Llama-Guard-3-8B"
 
 RUN_DATASETS="['xstest', 'bsa', 'wildjailbreak', 'strongreject']"
