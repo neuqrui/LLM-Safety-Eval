@@ -35,7 +35,7 @@ datasets:
     use_tokenizer_template: true
     sys_template: ""
     sampling_params:
-      temperature: 0.6
+      temperature: 0.5
       top_p: 0.95
       max_tokens: 8192
       n: 1
@@ -140,3 +140,63 @@ datasets:
       metrics_alpha: 0.7639364807041505
       metrics_k: 1
       metadata_dataset_path: "./datasets/wj_bsa_metadata_250.json"
+
+  # ====================================================================
+  # 过度拒绝测试集 (False Refusal Rate / Over Refusal)
+  # ====================================================================
+
+  oktest:
+    dataset_path: "datasets/OKTest.csv"
+    limit_num: 100
+    use_template: true
+    use_tokenizer_template: true
+    sys_template: ""
+    sampling_params:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 8192
+      n: 1
+    eval:
+      eval_method: "frr"           # 触发阶段 3 的 run_eval_frr 引擎
+
+  phtest:
+    dataset_path: "datasets/PHTest.csv"
+    limit_num: 100
+    use_template: true
+    use_tokenizer_template: true
+    sys_template: ""
+    sampling_params:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 8192
+      n: 1
+    eval:
+      eval_method: "frr"
+
+  falsereject:
+    dataset_path: "datasets/FalseReject_test.jsonl"
+    limit_num: 100
+    use_template: true
+    use_tokenizer_template: true
+    sys_template: ""
+    sampling_params:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 8192
+      n: 1
+    eval:
+      eval_method: "frr"
+
+  xstest-or:
+    dataset_path: "datasets/xstest_prompts.csv"
+    limit_num: 100
+    use_template: true
+    use_tokenizer_template: true
+    sys_template: ""
+    sampling_params:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 8192
+      n: 1
+    eval:
+      eval_method: "frr"

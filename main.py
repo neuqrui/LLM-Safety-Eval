@@ -16,7 +16,7 @@ except ImportError:
 # 导入你本地的工具包 (请确保它们在 utils 目录下)
 from utils.data_handler import load_and_prep_data, process_and_save_results
 from utils.eval_engine import run_eval_bsa, run_eval_strongreject, run_eval_xstest, run_eval_guard_vllm, \
-    append_to_summary_file
+    append_to_summary_file, run_eval_frr
 
 
 def get_args():
@@ -155,9 +155,9 @@ def main():
 
             sampling_params = SamplingParams(
                 n=n_gen,
-                temperature=sp_cfg.get('temperature', 0.7),
-                top_p=sp_cfg.get('top_p', 1.0),
-                max_tokens=sp_cfg.get('max_tokens', 1024),
+                temperature=sp_cfg.get('temperature', 0.5),
+                top_p=sp_cfg.get('top_p', 0.9),
+                max_tokens=sp_cfg.get('max_tokens', 4096),
                 stop_token_ids=[tokenizer.eos_token_id] if tokenizer else None
             )
 
@@ -220,10 +220,14 @@ def main():
             elif ds_name in ['wildchat', 'wildjailbreak']:
                 eval_res = run_eval_guard_vllm(model_config['name'], infer_path, dirs['eval'], api_config, eval_config)
 
+            elif ds_name in ['oktest', 'phtest', 'falsereject', 'xstest-or']:
+                eval_res = run_eval_frr(model_config['name'], infer_path, dirs['eval'], api_config)
+                
             # 写入统一的 Summary 日志
             summary_data = eval_res.get('summary_data')
             if summary_data is not None:
-                append_to_summary_file(model_config['name'], ds_name, dirs['result'], summary_data)
+                ds_config = config.get('datasets', {}).get(ds_name, {})
+                append_to_summary_file(model_config['name'], ds_name, dirs['result'], summary_data, ds_config=ds_config)
                 print(f"  └─ 评测完成！Summary 已保存。")
             else:
                 print(f"  └─ ⚠️ 评测完成，但未返回 Summary 数据。")

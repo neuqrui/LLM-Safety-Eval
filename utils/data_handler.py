@@ -44,7 +44,6 @@ def load_and_prep_data(ds_name: str, config: Dict[str, Any]) -> tuple[List[str],
             os.makedirs(os.path.dirname(dataset_path), exist_ok=True)
             dataset_hf.to_csv(dataset_path, index=False)
 
-        # 处理 API Key (越狱可能需要)
         api_conf = config.get('api_config', {})
         api_key = os.environ.get("OPENAI_API_KEY", api_conf.get('api_key', ''))
         if api_key:
@@ -161,6 +160,39 @@ def load_and_prep_data(ds_name: str, config: Dict[str, Any]) -> tuple[List[str],
         prompts_list = data[prompt_column]
         metadata_list = list(data)
         return prompts_list, metadata_list
+    elif ds_name in ['oktest', 'phtest', 'falsereject', 'xstest-or']:
+        file_path = config.get('dataset_path')
+        all_prompts = []
+
+        if ds_name == 'oktest':
+            df = pd.read_csv(file_path)
+            all_prompts = df['prompt'].dropna().tolist()
+        elif ds_name == 'phtest':
+            df = pd.read_csv(file_path)
+            safe_df = df[df['Harmfulness'] == 'harmless']  # 仅筛选良性数据
+            all_prompts = safe_df['Request'].dropna().tolist()
+        elif ds_name == 'falsereject':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    item = json.loads(line)
+                    if 'prompt' in item:
+                        all_prompts.append(item['prompt'])
+        elif ds_name == 'xstest-or':
+            df = pd.read_csv(file_path)
+            safe_df = df[df['label'] == 'safe']  # 仅筛选原本安全的 prompt
+            all_prompts = safe_df['prompt'].dropna().tolist()
+
+        # 使用 limit_num 进行采样
+        limit_num = config.get('limit_num', -1)
+        if limit_num != -1 and len(all_prompts) > limit_num:
+            import random
+            random.seed(42)  # 保持全局种子一致，方便复现
+            original_prompts_list = random.sample(all_prompts, limit_num)
+        else:
+            original_prompts_list = all_prompts
+
+        metadata_list = [{'instruction': p} for p in original_prompts_list]
+        return original_prompts_list, metadata_list
     else:
         raise ValueError(f"未知的数据集类型: {ds_name}")
 
@@ -175,8 +207,12 @@ def process_and_save_results(ds_name: str, model_name: str, output_dir: str, con
     min_len = min(len(raw_outputs_nested), len(metadata_list), len(original_prompts_list))
     all_results = []
 
-    # --- 1. JSON 输出 (StrongReject, Wildchat, Wildjailbreak) ---
-    if ds_name in ["strongreject", "wildchat", "wildjailbreak"]:
+    suffix = "_w_template" if config.get('use_template', False) else "_wo_template"
+
+    base_filename = f"{model_name}_{ds_name}{suffix}"
+
+    # 👇 修复 2：把那四个 FRR 数据集加进 JSON 的保存白名单里！
+    if ds_name in ["strongreject", "wildchat", "wildjailbreak", "oktest", "phtest", "falsereject", "xstest-or"]:
         for idx in range(min_len):
             original_data_dict = dict(metadata_list[idx])
             original_data_dict["instruction"] = original_prompts_list[idx]
@@ -185,7 +221,7 @@ def process_and_save_results(ds_name: str, model_name: str, output_dir: str, con
             original_data_dict["model"] = model_name
             all_results.append(original_data_dict)
 
-        output_file = os.path.join(output_dir, f"{model_name}.json")
+        output_file = os.path.join(output_dir, f"{base_filename}.json")
         meta_data = {"model_name": model_name, "dataset": ds_name}
         saved_data = {'meta_info': meta_data, 'data': all_results}
 
@@ -194,6 +230,7 @@ def process_and_save_results(ds_name: str, model_name: str, output_dir: str, con
 
     # --- 2. CSV 输出 (BSA) ---
     elif ds_name == "bsa":
+        # ... 保持不变 ...
         for idx in range(min_len):
             for response_text in raw_outputs_nested[idx]:
                 all_results.append({
@@ -201,11 +238,12 @@ def process_and_save_results(ds_name: str, model_name: str, output_dir: str, con
                     'response': response_text,
                     'id': metadata_list[idx].get('id', 'N/A')
                 })
-        output_file = os.path.join(output_dir, f"{model_name}.csv")
+        output_file = os.path.join(output_dir, f"{base_filename}.csv")
         pd.DataFrame(all_results).to_csv(output_file, index=False, encoding='utf-8')
 
     # --- 3. CSV 输出 (XSTest) ---
     elif ds_name == "xstest":
+        # ... 保持不变 ...
         for i in range(min_len):
             item = metadata_list[i]
             for response_text in raw_outputs_nested[i]:
@@ -217,7 +255,7 @@ def process_and_save_results(ds_name: str, model_name: str, output_dir: str, con
                     'label': item.get('label', 'N/A'),
                     'model': model_name
                 })
-        output_file = os.path.join(output_dir, f"{model_name}.csv")
+        output_file = os.path.join(output_dir, f"{base_filename}.csv")
         pd.DataFrame(all_results).to_csv(output_file, index=False, encoding='utf-8')
 
     print(f"Results saved to {output_file}", file=sys.stderr)

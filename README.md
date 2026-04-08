@@ -1,8 +1,12 @@
 # 🛡️ LLM Safety Alignment Evaluation Pipeline
 
-本项目是一个高效、可扩展且基于配置驱动的大语言模型（LLM）安全对齐评测框架。项目旨在通过统一的流水线完成大规模数据的自动化推理与 LLM-as-a-Judge 评估，彻底解决显存溢出 (OOM) 和多模型调度效率低下的问题。
+一个面向大语言模型安全评测的统一流水线，支持：
+- vLLM 批量推理
+- 多数据集自动加载与预处理
+- API Judge 与 Llama-Guard 评测
+- 统一汇总结果到 `outputs/result/<model_name>_summary.txt`
 
-## ✨ 核心特性
+项目主流程在 `main.py` 中分为三阶段：数据准备 -> 推理 -> 评测。推理结束后会主动释放显存，再进入评测阶段，减少 OOM 风险。
 
 - **🚀 推理与评测解耦**：一次性加载生成模型（vLLM）完成所有数据集的推理，随后强行释放显存，再集中加载评测模型（如 Llama-Guard）或调用 API，杜绝 OOM。
 - **⚙️ 动态配置驱动 (OmegaConf)**：完全抛弃繁杂的 `argparse`，通过单一 `config.yaml` 管理全局。支持在命令行通过 `key.subkey=value` 动态覆盖配置。
@@ -53,77 +57,113 @@ eval_llm_safety/
     └── result/             # 最终的 Summary 报告与可视化图表
 ```
 
-## ⚙️ 环境依赖
-确保你的环境中安装了以下基础依赖：
-```text
-conda create -n eval_llm_safety python=3.10
+## 环境准备
+
+建议 Python 3.10+。
+
+```bash
+conda create -n eval_llm_safety python=3.10 -y
 conda activate eval_llm_safety
 
 pip install -r requirements.txt
 ```
 
-## 🚀 快速上手
-方式 1：完全基于 YAML 运行
+## 快速开始
+
+### 1) 配置 `config.yaml`
+
+至少确认以下字段：
+- `model.name`：实验名（影响输出文件名前缀）
+- `model.path`：被评测模型路径
+- `model.mode`：当前代码主流程为 `vllm`
+- `run_datasets`：本次要跑的数据集列表
+- 对应 `datasets.<name>` 的 `dataset_path / prompt_column / eval` 配置
+
+### 2) 直接运行
+
 ```bash
-python main.py --config config.yaml
+python3 main.py --config config.yaml
 ```
 
-方式 2：使用启动脚本配合动态覆盖（推荐）
-我们推荐使用 run.sh，这使得在不同模型或实验之间切换变得极其简单。
+### 3) 用命令行覆盖配置（推荐）
 
-编辑 run.sh：
 ```bash
-#!/bin/bash
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-export HF_TOKEN="hf_你的token"
-
-# 实验变量
-MODEL_NAME="STAR1-R1-Distill-7B"
-MODEL_PATH="/data/home/Yichen/data1/models/STAR1/STAR1-R1-Distill-7B"
-EVALUATOR_MODEL="/data/home/Yichen/data1/models/meta-llama/Llama-Guard-3-8B"
-
-# 动态覆盖 YAML 配置并运行
 python3 main.py \
-    --config config.yaml \
-    model.name=$MODEL_NAME \
-    model.path=$MODEL_PATH \
-    run_datasets="['bsa', 'strongreject']" \
-    api_config.eval_api_model="gpt-4o-mini" \
-    api_config.max_workers=32 \
-    datasets.strongreject.eval.evaluator_model=$EVALUATOR_MODEL
+  --config config.yaml \
+  model.name="my-model" \
+  model.path="/path/to/model" \
+  run_datasets="['strongreject','wildjailbreak']" \
+  api_config.eval_api_model="gpt-4o-mini" \
+  api_config.max_workers=32 \
+  datasets.strongreject.eval.evaluator_model="/path/to/Llama-Guard-3-8B"
 ```
 
-## 📈 输出示例
-在所有评测运行结束后，你可以前往 outputs/result/{model_name}_summary.txt 查看高度格式化的对齐报告：
+### 4) 使用脚本 `run.sh`
 
-```Plaintext
---- STRONGREJECT Summary ---
-                      ASR (Attack Success Rate) DSR (Defense Success Rate)
-jailbreak                                                                 
-none                                     11.82%                     88.18%
-pair                                     14.06%                     85.94%
-pap_misrepresentation                    10.22%                     89.78%
+`run.sh` 已给出完整示例（包含环境变量、日志目录和参数覆盖），可按实验需要修改：
+- `MODEL_NAME`
+- `MODEL_PATH`
+- `RUN_DATASETS`
+- `CUDA_VISIBLE_DEVICES`
 
---- BSA Summary ---
-          answer_at_1  answer_at_k  Cognitive Shortcut_think_at_1  ...  F-Score
-model                                                                                                                                                                                                                                          
-STAR1-7B        88.12         66.5                          26.88  ...     36.7
+## 数据集与评测方式
 
---- XSTEST Summary ---
-Performance by Safe vs Unsafe Prompts
-(Labels: 1=Compliance, 2=Refusal, 3=Partial Refusal)
-final_label        1     2    3
-type                           
-Safe Prompts   59.6% 30.8% 9.6%
-Unsafe Prompts 12.0% 80.5% 7.5%
-```
+- `strongreject`
+  - 推理输出：JSON
+  - 评测方式：
+    - `eval.eval_method: guard` -> `run_eval_guard_vllm`
+    - `eval.eval_method: rubric` -> `run_eval_strongreject`
+- `bsa`
+  - 推理输出：CSV
+  - 评测方式：`run_eval_bsa`，并调用 `utils/evaluate.py` 计算指标
+- `xstest`
+  - 推理输出：CSV
+  - 评测方式：`run_eval_xstest`，附带分析文本与图表
+- `wildchat` / `wildjailbreak`
+  - 推理输出：JSON
+  - 评测方式：`run_eval_guard_vllm`
+- `oktest` / `phtest` / `falsereject` / `xstest-or`
+  - 推理输出：JSON
+  - 评测方式：`run_eval_frr`
 
----
-## 🛠️ 如何添加一个新的评测集？
+## 输出说明
 
-本框架采用极度解耦的设计，添加新数据集只需 **4 步**：
+一次完整运行后，典型产物包括：
+- `outputs/infer/<dataset>/<model>_<dataset>_(w|wo)_template.(json|csv)`
+- `outputs/eval/<dataset>/...`（各评测器生成的中间文件）
+- `outputs/result/<model>_summary.txt`（跨数据集摘要）
 
-1. **配置**：在 `config.yaml` 的 `datasets` 节点下增加新数据集的默认参数。
-2. **加载**：在 `utils/data_handler.py` 的 `load_and_prep_data` 中增加对应的数据集下载与解析逻辑。
-3. **评测引擎**：在 `utils/eval_engine.py` 中编写专属的 `run_eval_xxx` 函数（如果只是算 ASR，可以直接复用已有的 `run_eval_guard_vllm`）。
-4. **注册**：在 `main.py` 的 `阶段 3: 集中评测` 的 `if-elif` 语句中加入新数据集的方法分发。
+其中 `summary` 会按数据集追加写入，例如：
+- `--- STRONGREJECT_W_TEMPLATE Summary ---`
+- `--- XSTEST_WO_TEMPLATE Summary ---`
+
+## 常见配置项
+
+- `datasets.<name>.use_template`
+  - 是否启用模板包装（由 `apply_template` 控制）
+- `datasets.<name>.use_tokenizer_template`
+  - 是否使用 tokenizer 的 `apply_chat_template`
+- `datasets.<name>.sampling_params`
+  - `temperature / top_p / max_tokens / n`
+- `datasets.<name>.dataset_specific_params.pass_k`
+  - 用于覆盖某些数据集生成数（例如 BSA）
+
+## 日志与复现实验
+
+- `run.sh` 会创建：
+  - `EXPERIMENT_LOG_DIR=experiment_logs/eval_<model>_<time>/`
+  - 运行日志：`eval.log`
+- API 相关日志默认在 `api_logs/`
+
+## 注意事项
+
+- 当前仓库中的配置/代码里存在示例 API Key，请在私有环境中改为你自己的密钥，并避免提交到公共仓库。
+- 若评测流程使用 API Judge，请确保网络与配额可用。
+- 若使用 Llama-Guard 评测，请确认 `eval.evaluator_model` 路径正确，且 GPU 显存足够。
+
+## 扩展新数据集（最小改动路径）
+
+1. 在 `config.yaml` 增加 `datasets.<new_dataset>` 配置。
+2. 在 `utils/data_handler.py` 的 `load_and_prep_data` 增加加载逻辑。
+3. 在 `utils/eval_engine.py` 增加 `run_eval_<new_dataset>` 或复用现有评测函数。
+4. 在 `main.py` 的阶段 3 分发逻辑中注册新数据集。
