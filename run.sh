@@ -7,13 +7,15 @@ export HOME="/data/home/Yichen/CC-GRPO/eval_llm_safety"
 
 export CUDA_VISIBLE_DEVICES=0
 
-#/data/home/Yichen/CC-GRPO/verl/checkpoints/cc-grpo/lam-7B-05/global_step_100/hg_model
+# /data/home/Yichen/CC-GRPO/verl/checkpoints/cc-grpo/lam-7B-05/global_step_100/hg_model
+# grpo: /data/home/Yichen/CC-GRPO/verl/checkpoints/saver-grpo-7B/pure_grpo
 MODEL_NAME="saver-grpo-7B-new"
 MODEL_PATH="/data/home/Yichen/CC-GRPO/verl/checkpoints/saver-grpo-7B/pure_grpo"
 EVALUATOR_MODEL="/data/home/Yichen/data1/models/meta-llama/Llama-Guard-3-8B"
 
-RUN_DATASETS="['wildchat']"
+RUN_DATASETS="['oktest', 'falsereject', 'xstest-or', 'phtest', 'wildchat']"
 use_template=True
+frr_num=100
 
 CURRENT_TIME=$(date +"%Y%m%d_%H%M%S")
 export EXPERIMENT_LOG_DIR="$HOME/experiment_logs/eval_${MODEL_NAME}_${CURRENT_TIME}"
@@ -33,7 +35,11 @@ python3 main.py \
     datasets.bsa.use_template=True \
     datasets.wildjailbreak.limit_num=100 \
     datasets.strongreject.limit_num=100 \
-    datasets.wildchat.limit_num=1 \
+    datasets.wildchat.limit_num=-1 \
     datasets.bsa.limit_num=-1 \
+    datasets.oktest.limit_num=$frr_num \
+    datasets.falsereject.limit_num=$frr_num \
+    datasets.xstest-or.limit_num=$frr_num \
+    datasets.phtest.limit_num=$frr_num \
     datasets.wildjailbreak.eval.evaluator_model=$EVALUATOR_MODEL \
     2>&1 | tee $EXPERIMENT_LOG_DIR/eval.log

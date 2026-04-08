@@ -75,9 +75,10 @@ def load_inference_data(infer_result_path: str, dataset_type: str) -> Any:
     if not os.path.exists(infer_result_path):
         raise FileNotFoundError(f"Inference file missing: {infer_result_path}")
 
-    if dataset_type in ['strongreject', 'wildchat', 'wildjailbreak']:
+    if dataset_type in ['strongreject', 'wildchat', 'wildjailbreak', 'oktest', 'phtest', 'falsereject', 'xstest-or']:
         with open(infer_result_path, 'r', encoding='utf-8') as f:
-            return json.load(f)['data']
+            data = json.load(f)
+            return data.get('data', data)
     else:  # bsa, xstest
         return pd.read_csv(infer_result_path)
 
@@ -375,11 +376,11 @@ def run_eval_guard_vllm(model_name: str, infer_result_path: str, output_dir: str
     return {'files': [res_path], 'summary_data': summary}
 
 
-def run_eval_frr(model_name: str, infer_result_path: str, output_dir: str, api_config: dict) -> dict:
+def run_eval_frr(model_name: str, infer_result_path: str, output_dir: str, api_config: dict, dataset_type: str) -> dict:
     print(f"--- Running FRR Evaluation ---", file=sys.stderr)
 
-    # 1. 加载推理结果 (复用 JSON 读取逻辑)
-    data_list = load_inference_data(infer_result_path)
+    # 1. 加载推理结果（由调用方显式传入 dataset_type，避免从文件名提取）
+    data_list = load_inference_data(infer_result_path, dataset_type)
 
     # 2. 准备分类 Prompts
     prompts_to_classify = []

@@ -221,7 +221,7 @@ def main():
                 eval_res = run_eval_guard_vllm(model_config['name'], infer_path, dirs['eval'], api_config, eval_config)
 
             elif ds_name in ['oktest', 'phtest', 'falsereject', 'xstest-or']:
-                eval_res = run_eval_frr(model_config['name'], infer_path, dirs['eval'], api_config)
+                eval_res = run_eval_frr(model_config['name'], infer_path, dirs['eval'], api_config, ds_name)
                 
             # 写入统一的 Summary 日志
             summary_data = eval_res.get('summary_data')
